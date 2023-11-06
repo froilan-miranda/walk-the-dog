@@ -20,14 +20,17 @@ pub fn main_js() -> Result<(), JsValue> {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    let image = web_sys::HtmlImageElement::new().unwrap();
-    let callback = Closure::once(|| {
-        web_sys::console::log_1(&JsValue::from_str("loaded"));
+    wasm_bindgen_futures::spawn_local(async move {
+        let (success_tx, success_rx) = futures::channel::oneshot::channel::<()>();
+        let image = web_sys::HtmlImageElement::new().unwrap();
+        let callback = Closure::once(|| {
+            success_tx.send(());
+        });
+        image.set_onload(Some(callback.as_ref().unchecked_ref()));
+        image.set_src("Idle (1).png");
+        success_rx.await;
+        context.draw_image_with_html_image_element(&image, 0.0, 0.0);
     });
-    image.set_onload(Some(callback.as_ref().unchecked_ref()));
-    callback.forget();
-    image.set_src("Idle (1).png");
-    context.draw_image_with_html_image_element(&image, 0.0, 0.0);
 
     console::log_1(&JsValue::from_str("Made it to the end!"));
 
