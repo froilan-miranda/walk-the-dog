@@ -1,8 +1,28 @@
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
+
+#[derive(Deserialize)]
+struct Rect {
+    x: u16,
+    y: u16,
+    w: u16,
+    h: u16,
+}
+
+#[derive(Deserialize)]
+struct Cell {
+    from: Rect,
+}
+
+#[derive(Deserialize)]
+struct Sheet {
+    frames: HashMap<String, Cell>,
+}
 
 // This is like the `main` function, except for JavaScript.
 #[wasm_bindgen(start)]
@@ -40,10 +60,17 @@ pub fn main_js() -> Result<(), JsValue> {
         });
         image.set_onload(Some(callback.as_ref().unchecked_ref()));
         image.set_onerror(Some(error_callback.as_ref().unchecked_ref()));
-        //image.set_src("Idle (1).png");
-        image.set_src("rhg.png");
+        image.set_src("Idle (1).png");
+        //image.set_src("rhg.png"); // just a test of load error
         success_rx.await;
         context.draw_image_with_html_image_element(&image, 0.0, 0.0);
+        context.draw_image_with_html_image_element(&image, 0.0, 0.0);
+        let json = fetch_json("hrb.json")
+            .await
+            .expect("Coud not fetch rhb.json");
+        let sheet: Sheet = json
+            .into_serde()
+            .expect("Could not convert rhb.json into a Sheet structure");
     });
 
     console::log_1(&JsValue::from_str("Made it to the end!"));
@@ -53,9 +80,7 @@ pub fn main_js() -> Result<(), JsValue> {
 
 async fn fetch_json(json_path: &str) -> Result<JsValue, JsValue> {
     let window = web_sys::window().unwrap();
-    let resp_value = wasm_bindgen_futures::JsFuture::from(
-        window.fetch_with_str(json_path)
-    ).await?;
+    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(json_path)).await?;
     let resp: web_sys::Response = resp_value.dyn_into()?;
     wasm_bindgen_futures::JsFuture::from(resp.json()?).await
 }
