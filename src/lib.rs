@@ -6,6 +6,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
 
+#[macro_use]
+mod browser;
+
 #[derive(Deserialize)]
 struct Rect {
     x: u16,
