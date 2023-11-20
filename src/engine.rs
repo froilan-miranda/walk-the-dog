@@ -4,9 +4,36 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlImageElement;
+use web_sys::CanvasRenderingContext2d;
+use crate::browser::LoopClosure;
+use std::cell::RefCell;
 
 use crate::browser;
 
+pub trait Game {
+    fn update(&mut self);
+    fn draw(&self, context: &CanvasRenderingContext2d);
+}
+
+pub struct GameLoop;
+type SharedLoopClosure = Rc<RefCell<Option<LoopClosure>>>;
+impl GameLoop {
+    pub async fn start(mut game: impl Game + 'static) -> Result<()> {
+        let f: SharedLoopClosure = Rc::new(RefCell::new(None));
+        let g = f.clone();
+        *g.borrow_mut() = Some(browser::create_raf_closure(move |perf: f64| {
+            game.update();
+            game.draw(&browser::context().expect("Context should exist"));
+            browser::request_animation_frame(f.borrow().as_ref().unwrap());
+        }));
+        browser::request_animation_frame(
+            g.borrow()
+                .as_ref()
+                .ok_or_else(|| anyhow!("GameLoop: Loop is None"))?,
+        )?;
+        Ok(())
+    }
+}
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     let image = browser::new_image()?;
     let (complete_tx, complete_rx) = channel::<Result<()>>();
