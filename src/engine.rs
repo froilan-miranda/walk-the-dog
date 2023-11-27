@@ -5,11 +5,19 @@ use futures::channel::oneshot::channel;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
+use std::collections::HashMap;
+use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 use web_sys::HtmlImageElement;
+use web_sys::KeyboardEvent;
 
 use crate::browser;
+
+enum KeyPress {
+    KeyUp(web_sys::KeyboardEvent),
+    KeyDown(web_sys::KeyboardEvent),
+}
 
 pub struct Rect {
     pub x: f32,
@@ -51,7 +59,7 @@ impl Renderer {
 #[async_trait(?Send)]
 pub trait Game {
     async fn initialize(&self) -> Result<Box<dyn Game>>;
-    fn update(&mut self);
+    fn update(&mut self, keystate: &KeyState);
     fn draw(&self, renderer: &Renderer);
 }
 
@@ -64,6 +72,7 @@ pub struct GameLoop {
 type SharedLoopClosure = Rc<RefCell<Option<LoopClosure>>>;
 impl GameLoop {
     pub async fn start(game: impl Game + 'static) -> Result<()> {
+        let mut keyevent_receiver = prepare_input()?;
         let mut game = game.initialize().await?;
         let mut game_loop = GameLoop {
             last_frame: browser::now()?,
@@ -74,10 +83,12 @@ impl GameLoop {
         };
         let f: SharedLoopClosure = Rc::new(RefCell::new(None));
         let g = f.clone();
+        let mut keystate = KeyState::new();
         *g.borrow_mut() = Some(browser::create_raf_closure(move |perf: f64| {
+            process_input(&mut keystate, &mut keyevent_receiver);
             game_loop.accumulated_delta += (perf - game_loop.last_frame) as f32;
             while game_loop.accumulated_delta > FRAME_SIZE {
-                game.update();
+                game.update(&keystate);
                 game_loop.accumulated_delta -= FRAME_SIZE;
             }
             game_loop.last_frame = perf;
@@ -92,6 +103,28 @@ impl GameLoop {
         Ok(())
     }
 }
+
+pub struct KeyState {
+    pressed_keys: HashMap<String, web_sys::KeyboardEvent>,
+}
+
+impl KeyState {
+    pub fn new() -> Self {
+        Self {
+            pressed_keys: HashMap::new(),
+        }
+    }
+    pub fn is_pressed(&self, code: &str) -> bool {
+        self.pressed_keys.contains_key(code)
+    }
+    pub fn set_pressed(&mut self, code: &str, event: web_sys::KeyboardEvent) {
+        self.pressed_keys.insert(code.into(), event);
+    }
+    pub fn set_released(&mut self, code: &str) {
+        self.pressed_keys.remove(code.into());
+    }
+}
+
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     let image = browser::new_image()?;
     let (complete_tx, complete_rx) = channel::<Result<()>>();
@@ -112,4 +145,39 @@ pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     image.set_src(source);
     complete_rx.await??;
     Ok(image)
+}
+
+fn prepare_input() -> Result<UnboundedReceiver<KeyPress>> {
+    let (keydown_sender, keyevent_receiver) = unbounded();
+    let keydown_sender = Rc::new(RefCell::new(keydown_sender));
+    let keyup_sender = Rc::clone(&keydown_sender);
+    let onkeydown = browser::closure_wrap(Box::new(move |keycode:web_sys::KeyboardEvent| {
+        keydown_sender
+            .borrow_mut()
+            .start_send(KeyPress::KeyDown(keycode));
+    }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+    let onkeyup = browser::closure_wrap(Box::new(move |keycode: web_sys::KeyboardEvent| {
+        keyup_sender
+            .borrow_mut()
+            .start_send(KeyPress::KeyUp(keycode));
+        
+    }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+    browser::window()?.set_onkeydown(Some(onkeydown.as_ref().unchecked_ref()));
+    browser::window()?.set_onkeyup(Some(onkeyup.as_ref().unchecked_ref()));
+    onkeydown.forget();
+    onkeyup.forget();
+    Ok(keyevent_receiver)
+}
+
+fn process_input(state: &mut KeyState, keyevent_receiver: &mut UnboundedReceiver<KeyPress>) {
+    loop {
+        match keyevent_receiver.try_next() {
+            Ok(None) => break,
+            Err(_err) => break,
+            Ok(Some(evt)) => match evt {
+                KeyPress::KeyUp(evt) => state.set_released(&evt.code()),
+                KeyPress::KeyDown(evt) => state.set_pressed(&evt.code(),evt),
+            },
+        };
+    }
 }

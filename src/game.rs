@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::browser;
 use crate::engine;
-use crate::engine::{Game, Renderer, Rect};
+use crate::engine::{Game, Renderer, Rect, KeyState};
 
 pub struct WalkTheDog {
     image: Option<HtmlImageElement>,
@@ -53,7 +53,7 @@ impl Game for WalkTheDog {
             frame: self.frame,
         }))
     }
-    fn update(&mut self) {
+    fn update(&mut self, keystate: &KeyState) {
         if self.frame < 23 {
             self.frame += 1;
         } else {
