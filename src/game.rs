@@ -1,17 +1,18 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
-use web_sys::HtmlImageElement;
 use std::collections::HashMap;
+use web_sys::HtmlImageElement;
 
 use crate::browser;
 use crate::engine;
-use crate::engine::{Game, Renderer, Rect, KeyState};
+use crate::engine::{Game, KeyState, Point, Rect, Renderer};
 
 pub struct WalkTheDog {
     image: Option<HtmlImageElement>,
     sheet: Option<Sheet>,
     frame: u8,
+    position: Point,
 }
 
 impl WalkTheDog {
@@ -20,6 +21,7 @@ impl WalkTheDog {
             image: None,
             sheet: None,
             frame: 0,
+            position: Point { x: 0, y: 0 },
         }
     }
 }
@@ -45,15 +47,32 @@ struct Sheet {
 #[async_trait(?Send)]
 impl Game for WalkTheDog {
     async fn initialize(&self) -> Result<Box<dyn Game>> {
-        let sheet: Sheet = browser::fetch_json("rhb.json").await?.into_serde()?;
-        let image = engine::load_image("rhb.png").await?;
+        let json = browser::fetch_json("rhb.json").await?;
+        let sheet = json.into_serde()?;
+        let image = Some(engine::load_image("rhb.png").await?);
         Ok(Box::new(WalkTheDog {
-            image: Some(image),
-            sheet: Some(sheet),
+            image,
+            sheet,
             frame: self.frame,
+            position: self.position,
         }))
     }
     fn update(&mut self, keystate: &KeyState) {
+        let mut velocity = Point { x: 0, y: 0 };
+        if keystate.is_pressed("ArrowDown") {
+            velocity.y += 3;
+        }
+        if keystate.is_pressed("ArrowUp") {
+            velocity.y -= 3;
+        }
+        if keystate.is_pressed("ArrowRight") {
+            velocity.x += 3;
+        }
+        if keystate.is_pressed("ArrowLeft") {
+            velocity.x -= 3;
+        }
+        self.position.x += velocity.x;
+        self.position.y += velocity.y;
         if self.frame < 23 {
             self.frame += 1;
         } else {
@@ -84,8 +103,8 @@ impl Game for WalkTheDog {
                     height: sprite.frame.h.into(),
                 },
                 &Rect {
-                    x: 300.0,
-                    y: 300.0,
+                    x: self.position.x.into(),
+                    y: self.position.y.into(),
                     width: sprite.frame.w.into(),
                     height: sprite.frame.h.into(),
                 },

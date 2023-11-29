@@ -2,14 +2,13 @@ use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 
-use crate::game::WalkTheDog;
 use crate::engine::GameLoop;
+use crate::game::WalkTheDog;
 
 #[macro_use]
 mod browser;
 mod engine;
 mod game;
-
 
 // This is like the `main` function, except for JavaScript.
 #[wasm_bindgen(start)]
