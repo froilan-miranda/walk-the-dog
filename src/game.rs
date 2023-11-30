@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use web_sys::HtmlImageElement;
 
+use self::red_hat_boy_states::*;
 use crate::browser;
 use crate::engine;
 use crate::engine::{Game, KeyState, Point, Rect, Renderer};
@@ -24,6 +25,37 @@ impl WalkTheDog {
             position: Point { x: 0, y: 0 },
         }
     }
+}
+
+struct RedHatBoy {
+    state_machine: RedHatBoyStateMachine,
+    sprite_sheet: Sheet,
+    image: HtmlImageElement,
+}
+
+#[derive(Copy, Clone)]
+enum RedHatBoyStateMachine {
+    Idle(RedHatBoyState<Idle>),
+    Running(RedHatBoyState<Running>),
+}
+
+mod red_hat_boy_states {
+    use crate::engine::Point;
+    #[derive(Copy, Clone)]
+    pub struct RedHatBoyState<S> {
+        context: RedHatBoyContext,
+        _state: S,
+    }
+    #[derive(Copy, Clone)]
+    pub struct RedHatBoyContext {
+        frame: u8,
+        position: Point,
+        velocity: Point,
+    }
+    #[derive(Copy, Clone)]
+    pub struct Idle;
+    #[derive(Copy, Clone)]
+    pub struct Running;
 }
 
 #[derive(Deserialize)]
