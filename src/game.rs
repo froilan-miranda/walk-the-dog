@@ -56,6 +56,15 @@ mod red_hat_boy_states {
     pub struct Idle;
     #[derive(Copy, Clone)]
     pub struct Running;
+
+    impl RedHatBoyState<Idle> {
+        pub fn run(sself) -> RedHatBoyState<Running> {
+            RedHatBoyState {
+                context: self.context,
+                _state: Running {},
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
