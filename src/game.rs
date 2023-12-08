@@ -72,6 +72,9 @@ impl RedHatBoy {
             },
         );
     }
+    fn update(&mut self) {
+        self.state_machine = self.state_machine.update();
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -103,6 +106,26 @@ impl RedHatBoyStateMachine {
             RedHatBoyStateMachine::Running(state) => &state.context(),
         }
     }
+    fn update(self) -> Self {
+        match self {
+            RedHatBoyStateMachine::Idle(mut state) => {
+                if state.context.frame < 29 {
+                    state.context.frame += 1;
+                } else {
+                    state.context.frame = 0;
+                }
+                RedHatBoyStateMachine::Idle(state)
+            }
+            RedHatBoyStateMachine::Running(mut state) => {
+                if state.context.frame < 23 {
+                    state.context.frame += 1;
+                } else {
+                    state.context.frame = 0;
+                }
+                RedHatBoyStateMachine::Running(state)
+            }
+        }
+    }
 }
 
 impl From<RedHatBoyState<Running>> for RedHatBoyStateMachine {
@@ -117,7 +140,7 @@ mod red_hat_boy_states {
     const RUN_FRAME_NAME: &str = "Run";
     #[derive(Copy, Clone)]
     pub struct RedHatBoyState<S> {
-        context: RedHatBoyContext,
+        pub context: RedHatBoyContext,
         _state: S,
     }
     impl<S> RedHatBoyState<S> {
@@ -220,6 +243,7 @@ impl Game for WalkTheDog {
         } else {
             self.frame = 0;
         }
+        self.rhb.as_mut().unwrap().update();
     }
     fn draw(&self, renderer: &Renderer) {
         let current_sprite = (self.frame / 3) + 1;
